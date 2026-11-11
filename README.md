@@ -2,6 +2,8 @@
 
 一个面向企业 / 行业内部培训与考试场景的前后端分离考试系统：**学员端 H5 + 管理后台 + FastAPI 后端**。支持刷题、错题本、在线考试、学员自主组卷、练习统计、题库批量导入、公告、视频 / 书籍资源和可配置品牌。
 
+> 仓库地址：<https://github.com/dabaibai01/canyum-exam>
+>
 > 如果这个项目对你有帮助，欢迎点一个 Star，这是对开源作者最直接的鼓励。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
