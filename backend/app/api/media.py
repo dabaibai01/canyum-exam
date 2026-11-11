@@ -1,5 +1,9 @@
+import mimetypes
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from app.api.upload import delete_local_file, resolve_local_file
 from app.core.database import get_db
 from app.core.deps import require_admin
 from app.models.media import Video, Book
@@ -42,10 +46,13 @@ def update_video(video_id: int, video_in: VideoCreate, db: Session = Depends(get
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="视频不存在")
+    old_url = video.video_url
     for key, value in video_in.model_dump().items():
         setattr(video, key, value)
     db.commit()
     db.refresh(video)
+    if old_url != video.video_url:
+        delete_local_file(old_url)
     return video
 
 @router.delete("/videos/{video_id}", dependencies=[Depends(require_admin)])
@@ -53,8 +60,10 @@ def delete_video(video_id: int, db: Session = Depends(get_db)):
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="视频不存在")
+    old_url = video.video_url
     db.delete(video)
     db.commit()
+    delete_local_file(old_url)
     return {"message": "删除成功"}
 
 # ========== 书籍 ==========
@@ -87,15 +96,36 @@ def create_book(book_in: BookCreate, db: Session = Depends(get_db)):
     db.refresh(book)
     return book
 
+@router.get("/books/{book_id}/file")
+def open_book_file(book_id: int, db: Session = Depends(get_db)):
+    """公开打开书籍文件：本地文件按书名返回，外链直接跳转。"""
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book or not book.file_url:
+        raise HTTPException(status_code=404, detail="书籍文件不存在")
+
+    local = resolve_local_file(book.file_url)
+    if local:
+        media_type = mimetypes.guess_type(str(local))[0] or "application/octet-stream"
+        return FileResponse(
+            str(local),
+            media_type=media_type,
+            filename=f"{book.title}{local.suffix}",
+            content_disposition_type="inline",
+        )
+    return RedirectResponse(book.file_url, status_code=307)
+
 @router.put("/books/{book_id}", response_model=BookOut, dependencies=[Depends(require_admin)])
 def update_book(book_id: int, book_in: BookCreate, db: Session = Depends(get_db)):
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="书籍不存在")
+    old_url = book.file_url
     for key, value in book_in.model_dump().items():
         setattr(book, key, value)
     db.commit()
     db.refresh(book)
+    if old_url != book.file_url:
+        delete_local_file(old_url)
     return book
 
 @router.delete("/books/{book_id}", dependencies=[Depends(require_admin)])
@@ -103,6 +133,8 @@ def delete_book(book_id: int, db: Session = Depends(get_db)):
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="书籍不存在")
+    old_url = book.file_url
     db.delete(book)
     db.commit()
+    delete_local_file(old_url)
     return {"message": "删除成功"}

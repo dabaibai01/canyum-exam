@@ -13,6 +13,7 @@
           :key="book.id"
           class="row"
           :class="{ 'no-line': index === books.length - 1 }"
+          @click="openBook(book)"
         >
           <div class="row-icon">
             <van-icon name="book-o" size="18" />
@@ -32,9 +33,18 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { showToast } from 'vant'
 import { mediaApi } from '../api'
 
 const books = ref([])
+
+const openBook = (book) => {
+  if (!book.file_url) {
+    showToast('该书籍暂未上传文件')
+    return
+  }
+  window.open(`/api/media/books/${book.id}/file`, '_blank', 'noopener')
+}
 
 const loadBooks = async () => {
   try {
@@ -65,6 +75,10 @@ onMounted(() => {
   align-items: center;
   padding: 14px 16px;
   position: relative;
+  cursor: pointer;
+}
+.row:active {
+  background: var(--card-bg-sub);
 }
 .row::after {
   content: '';
