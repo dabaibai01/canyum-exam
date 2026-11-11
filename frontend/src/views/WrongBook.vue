@@ -958,4 +958,38 @@ onMounted(() => {
 .compose-total b {
   color: var(--danger);
 }
+
+/* 夜间模式：提高错题筛选、日期和组卷弹窗的可读性 */
+.dark-mode .date-field input {
+  color-scheme: dark;
+}
+.dark-mode .date-field input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.85;
+}
+.dark-mode .filter-item {
+  color: var(--text-secondary);
+}
+.dark-mode .filter-item.on {
+  color: var(--brand);
+}
+.dark-mode .card-bottom,
+.dark-mode .date-note,
+.dark-mode .compose-hint {
+  color: var(--text-tertiary);
+}
+.dark-mode .compose-total {
+  color: var(--text-secondary);
+}
+.dark-mode .compose-total b {
+  color: #ff9a9e;
+}
+.dark-mode .date-quick span {
+  color: var(--text-secondary);
+  background: var(--card-bg-sub);
+}
+.dark-mode .date-quick span:active {
+  color: var(--brand);
+  background: var(--brand-light);
+}
 </style>

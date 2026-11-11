@@ -13,7 +13,5 @@ class SiteSettingsOut(BaseModel):
 class SiteSettingsUpdate(BaseModel):
     site_name: str | None = Field(default=None, max_length=40)
     site_subtitle: str | None = Field(default=None, max_length=80)
-    developer_name: str | None = Field(default=None, max_length=60)
-    footer_text: str | None = Field(default=None, max_length=120)
     icp_no: str | None = Field(default=None, max_length=60)
     logo_url: str | None = Field(default=None, max_length=500)

@@ -32,12 +32,6 @@
               </div>
             </el-form-item>
 
-            <el-form-item label="开发者">
-              <el-input v-model="form.developer_name" maxlength="60" placeholder="可以云码软件开发" />
-            </el-form-item>
-            <el-form-item label="页脚文字">
-              <el-input v-model="form.footer_text" maxlength="120" placeholder="可以云码考试系统" />
-            </el-form-item>
             <el-form-item label="备案号">
               <el-input v-model="form.icp_no" maxlength="60" placeholder="例如：蒙ICP备XXXXXXXX号" />
             </el-form-item>
@@ -86,7 +80,7 @@
               <div class="preview-sub">{{ form.site_subtitle || '考试 · 刷题 · 组卷' }}</div>
             </div>
           </div>
-          <div class="preview-foot">{{ form.footer_text || form.site_name || '可以云码考试系统' }}</div>
+          <div class="preview-foot">{{ site.footer_text || '可以云码考试系统' }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -108,8 +102,6 @@ const pwdLoading = ref(false)
 const form = reactive({
   site_name: '',
   site_subtitle: '',
-  developer_name: '',
-  footer_text: '',
   icp_no: '',
   logo_url: ''
 })
@@ -118,8 +110,6 @@ const pwd = reactive({ old: '', new: '', confirm: '' })
 const fillForm = () => {
   form.site_name = site.site_name
   form.site_subtitle = site.site_subtitle
-  form.developer_name = site.developer_name
-  form.footer_text = site.footer_text
   form.icp_no = site.icp_no
   form.logo_url = site.logo_url
 }
@@ -170,8 +160,6 @@ const saveBrand = async () => {
     const res = await siteApi.update({
       site_name: form.site_name.trim(),
       site_subtitle: form.site_subtitle.trim(),
-      developer_name: form.developer_name.trim(),
-      footer_text: form.footer_text.trim(),
       icp_no: form.icp_no.trim(),
       logo_url: form.logo_url
     })

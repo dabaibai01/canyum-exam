@@ -1,4 +1,4 @@
-"""站点设置：公开读取品牌信息，管理员修改名称、Logo、开发者和备案号。"""
+"""站点设置：公开读取品牌信息，管理员修改名称、Logo、备案号。"""
 import os
 import uuid
 
@@ -22,7 +22,9 @@ DEFAULT_VALUES = {
     "logo_url": "",
 }
 
-EDITABLE_KEYS = tuple(DEFAULT_VALUES.keys())
+# 开发者与页脚是固定的品牌信息，不允许通过设置接口修改。
+FIXED_KEYS = ("developer_name", "footer_text")
+EDITABLE_KEYS = ("site_name", "site_subtitle", "icp_no", "logo_url")
 MAX_LOGO_SIZE = 2 * 1024 * 1024
 
 
@@ -61,6 +63,8 @@ def update_site_settings(
         else:
             db.add(SiteSetting(key=key, value=cleaned or ""))
 
+    # 清掉旧版本可能写入的开发者/页脚自定义值，固定为默认品牌信息。
+    db.query(SiteSetting).filter(SiteSetting.key.in_(FIXED_KEYS)).delete(synchronize_session=False)
     db.commit()
     return _read_values(db)
 

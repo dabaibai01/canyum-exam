@@ -94,30 +94,54 @@ onMounted(() => {
 
 /* ============ 暗色模式 ============ */
 :root.dark-mode {
-  --brand: #4f9bf0;
-  --brand-light: #1e2f45;
-  --accent: #f0ad4e;
+  color-scheme: dark;
+  --brand: #6cb2ff;
+  --brand-light: #1e3550;
+  --accent: #ffc15c;
+  --success: #42d392;
+  --danger: #ff7b80;
 
   --bg-color: #12161c;
   --card-bg: #1c222b;
-  --card-bg-sub: #232a35;
-  --text-color: #eef1f5;
-  --text-secondary: #97a3b4;
-  --text-tertiary: #6b7787;
-  --border-color: #2c3542;
+  --card-bg-sub: #26303d;
+  --text-color: #f2f5f9;
+  --text-secondary: #c2ccda;
+  --text-tertiary: #a3b0c1;
+  --border-color: #364252;
   --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.35);
   --shadow-float: 0 10px 24px rgba(0, 0, 0, 0.45);
   --hero-gradient: linear-gradient(135deg, #0a1f3d 0%, #13315c 55%, #1c4b82 100%);
 
-  --van-primary-color: #4f9bf0;
+  --van-primary-color: #6cb2ff;
+  --van-success-color: #42d392;
+  --van-danger-color: #ff7b80;
+  --van-warning-color: #ffc15c;
   --van-background: #12161c;
   --van-background-2: #1c222b;
-  --van-text-color: #eef1f5;
-  --van-text-color-2: #97a3b4;
-  --van-border-color: #2c3542;
+  --van-background-3: #26303d;
+  --van-text-color: #f2f5f9;
+  --van-text-color-2: #c2ccda;
+  --van-text-color-3: #a3b0c1;
+  --van-border-color: #364252;
+  --van-active-color: #26303d;
+  --van-tab-text-color: #c2ccda;
+  --van-tab-active-text-color: #6cb2ff;
+  --van-tabs-bottom-bar-color: #6cb2ff;
+  --van-search-background: #1c222b;
+  --van-search-content-background: #26303d;
+  --van-field-input-text-color: #f2f5f9;
+  --van-field-placeholder-text-color: #a3b0c1;
+  --van-cell-text-color: #f2f5f9;
+  --van-cell-background: #1c222b;
+  --van-popup-background: #1c222b;
+  --van-stepper-background: #26303d;
+  --van-stepper-input-background: #26303d;
+  --van-stepper-input-text-color: #f2f5f9;
+  --van-stepper-button-icon-color: #f2f5f9;
+  --van-stepper-border-color: #364252;
   --van-tabbar-background: #1c222b;
-  --van-tabbar-item-active-color: #4f9bf0;
-  --van-tabbar-item-text-color: #97a3b4;
+  --van-tabbar-item-active-color: #6cb2ff;
+  --van-tabbar-item-text-color: #c2ccda;
 }
 
 html, body {
@@ -273,5 +297,58 @@ html, body {
 }
 .dark-mode .van-search__content {
   background: var(--card-bg-sub);
+}
+.dark-mode .van-search__content .van-field__control {
+  color: var(--text-color);
+}
+.dark-mode .van-search__content .van-field__control::placeholder {
+  color: var(--text-tertiary);
+}
+.dark-mode .van-search .van-icon,
+.dark-mode .van-nav-bar .van-icon,
+.dark-mode .van-nav-bar__text {
+  color: var(--text-secondary);
+}
+.dark-mode .van-popup .van-icon,
+.dark-mode .van-dialog .van-icon {
+  color: var(--text-color);
+}
+.dark-mode .van-tabs__nav .van-tab {
+  color: var(--text-secondary);
+}
+.dark-mode .van-tabs__nav .van-tab--active {
+  color: var(--brand);
+}
+.dark-mode .van-stepper__minus,
+.dark-mode .van-stepper__plus,
+.dark-mode .van-stepper__input {
+  background: var(--card-bg-sub);
+  color: var(--text-color);
+  border-color: var(--border-color);
+}
+.dark-mode .van-stepper__minus::before,
+.dark-mode .van-stepper__plus::before,
+.dark-mode .van-stepper__plus::after {
+  background-color: var(--text-color);
+}
+.dark-mode .van-radio__label,
+.dark-mode .van-checkbox__label {
+  color: var(--text-color);
+}
+.dark-mode .van-tag--plain.van-tag--primary {
+  color: var(--brand);
+  border-color: rgba(108, 178, 255, 0.55);
+}
+.dark-mode .van-tag--plain.van-tag--danger {
+  color: var(--danger);
+  border-color: rgba(255, 123, 128, 0.55);
+}
+.dark-mode .van-tag--plain.van-tag--success {
+  color: var(--success);
+  border-color: rgba(66, 211, 146, 0.55);
+}
+.dark-mode .van-tag--plain.van-tag--warning {
+  color: var(--accent);
+  border-color: rgba(255, 193, 92, 0.55);
 }
 </style>
