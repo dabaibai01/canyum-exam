@@ -1,0 +1,108 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.deps import require_admin
+from app.models.media import Video, Book
+from app.schemas.media import VideoOut, VideoCreate, BookOut, BookCreate
+
+router = APIRouter(prefix="/api/media", tags=["媒体"])
+
+# ========== 视频 ==========
+
+@router.get("/videos", response_model=list[VideoOut])
+def list_videos(
+    category_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Video).filter(Video.status == 1)
+    if category_id:
+        query = query.filter(Video.category_id == category_id)
+    videos = query.order_by(Video.sort).offset((page - 1) * page_size).limit(page_size).all()
+    return videos
+
+@router.get("/videos/{video_id}", response_model=VideoOut)
+def get_video(video_id: int, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+    return video
+
+@router.post("/videos", response_model=VideoOut, dependencies=[Depends(require_admin)])
+def create_video(video_in: VideoCreate, db: Session = Depends(get_db)):
+    video = Video(**video_in.model_dump())
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+    return video
+
+@router.put("/videos/{video_id}", response_model=VideoOut, dependencies=[Depends(require_admin)])
+def update_video(video_id: int, video_in: VideoCreate, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+    for key, value in video_in.model_dump().items():
+        setattr(video, key, value)
+    db.commit()
+    db.refresh(video)
+    return video
+
+@router.delete("/videos/{video_id}", dependencies=[Depends(require_admin)])
+def delete_video(video_id: int, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+    db.delete(video)
+    db.commit()
+    return {"message": "删除成功"}
+
+# ========== 书籍 ==========
+
+@router.get("/books", response_model=list[BookOut])
+def list_books(
+    category_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Book).filter(Book.status == 1)
+    if category_id:
+        query = query.filter(Book.category_id == category_id)
+    books = query.order_by(Book.sort).offset((page - 1) * page_size).limit(page_size).all()
+    return books
+
+@router.get("/books/{book_id}", response_model=BookOut)
+def get_book(book_id: int, db: Session = Depends(get_db)):
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="书籍不存在")
+    return book
+
+@router.post("/books", response_model=BookOut, dependencies=[Depends(require_admin)])
+def create_book(book_in: BookCreate, db: Session = Depends(get_db)):
+    book = Book(**book_in.model_dump())
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+    return book
+
+@router.put("/books/{book_id}", response_model=BookOut, dependencies=[Depends(require_admin)])
+def update_book(book_id: int, book_in: BookCreate, db: Session = Depends(get_db)):
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="书籍不存在")
+    for key, value in book_in.model_dump().items():
+        setattr(book, key, value)
+    db.commit()
+    db.refresh(book)
+    return book
+
+@router.delete("/books/{book_id}", dependencies=[Depends(require_admin)])
+def delete_book(book_id: int, db: Session = Depends(get_db)):
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="书籍不存在")
+    db.delete(book)
+    db.commit()
+    return {"message": "删除成功"}

@@ -1,0 +1,58 @@
+# 环境与密钥
+.env
+.env.*
+!.env.example
+deploy/backend/env.sh
+!deploy/backend/env.sh.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 数据库、上传文件和备份
+backend/test.db
+backend/test.db.*
+backend/data/
+backend/uploads/
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.dump
+
+# Node / 构建产物
+node_modules/
+*/node_modules/
+dist/
+*/dist/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 部署包、离线依赖和日志
+*.zip
+*.tar.gz
+*.tgz
+deploy/server-package*/
+deploy/python-portable/
+deploy/wheelhouse*/
+deploy/_wheel_verify*/
+*.log
+*.pid
+
+# 编辑器与系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 临时截图 / 脚本产物
+scripts/_*
+docs/_*
