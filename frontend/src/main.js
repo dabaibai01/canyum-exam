@@ -11,6 +11,7 @@ const routes = [
   { path: '/login', component: () => import('./views/Login.vue') },
   { path: '/change-password', component: () => import('./views/ChangePassword.vue') },
   { path: '/practice', component: () => import('./views/Practice.vue') },
+  { path: '/practice/search', component: () => import('./views/PracticeSearch.vue') },
   { path: '/practice/start', component: () => import('./views/PracticeStart.vue') },
   { path: '/wrong', component: () => import('./views/WrongBook.vue') },
   { path: '/exam', component: () => import('./views/Exam.vue') },

@@ -48,6 +48,7 @@ class QuestionOut(BaseModel):
     score: float
     status: int
     created_at: datetime
+    correct_answer: str | None = None
     options: list[OptionOut] = []
 
     class Config:

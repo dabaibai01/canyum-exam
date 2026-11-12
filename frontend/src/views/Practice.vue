@@ -2,6 +2,15 @@
   <div class="page practice-page">
     <van-nav-bar title="刷题练习" />
 
+    <div class="search-wrap">
+      <van-search
+        v-model="keyword"
+        shape="round"
+        placeholder="搜索题干关键词，快速找题"
+        @search="goSearch"
+      />
+    </div>
+
     <!-- 练习模式 -->
     <div class="section first">
       <div class="card mode-card">
@@ -33,6 +42,15 @@
             <div class="row-sub">{{ resumeHint(0) || '覆盖全部专业与模块' }}</div>
           </div>
           <div class="row-count">{{ totalCount }} 题</div>
+          <van-icon name="arrow" class="row-arrow" />
+        </div>
+        <div class="cat-row" @click="startFavorites">
+          <div class="row-icon fav-icon"><van-icon name="star-o" size="18" /></div>
+          <div class="row-main">
+            <div class="row-title">我的收藏</div>
+            <div class="row-sub">重点标记的题目，按收藏时间复习</div>
+          </div>
+          <div class="row-count">{{ favoritesTotal }} 题</div>
           <van-icon name="arrow" class="row-arrow" />
         </div>
         <div class="cat-row no-line" @click="router.push('/wrong')">
@@ -78,14 +96,37 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { showToast } from 'vant'
 import { questionApi, practiceApi } from '../api'
 import { getPracticeOffset } from '../utils/practiceProgress'
 
 const router = useRouter()
 const mode = ref('order')
+const keyword = ref('')
 const groups = ref([])
 const totalCount = ref(0)
 const pendingWrong = ref(0)
+const favoritesTotal = ref(0)
+
+const goSearch = () => {
+  const text = keyword.value.trim()
+  if (!text) {
+    showToast('请输入要搜索的关键词')
+    return
+  }
+  router.push({ path: '/practice/search', query: { keyword: text } })
+}
+
+const startFavorites = () => {
+  if (!favoritesTotal.value) {
+    showToast('还没有收藏题目，刷题时点底部星标即可收藏')
+    return
+  }
+  router.push({
+    path: '/practice/start',
+    query: { source: 'favorite', total: String(favoritesTotal.value) }
+  })
+}
 
 const resumeHint = (categoryId) => {
   if (mode.value !== 'order') return ''
@@ -148,6 +189,15 @@ const loadWrongCount = async () => {
   }
 }
 
+const loadFavoriteCount = async () => {
+  try {
+    const res = await practiceApi.getFavorites({ page: 1, page_size: 1 })
+    favoritesTotal.value = res.total || 0
+  } catch (error) {
+    favoritesTotal.value = 0
+  }
+}
+
 const startPractice = (cat) => {
   if (!cat) return
   const total = cat.id === 0 ? totalCount.value : (cat.question_count || 0)
@@ -166,12 +216,20 @@ const startPractice = (cat) => {
 onMounted(() => {
   loadCategories()
   loadWrongCount()
+  loadFavoriteCount()
 })
 </script>
 
 <style scoped>
 .practice-page {
   padding-bottom: 90px;
+}
+.search-wrap {
+  padding: 6px 10px 0;
+}
+.search-wrap :deep(.van-search) {
+  padding: 4px 0;
+  background: transparent;
 }
 .section.first {
   margin-top: 12px;
@@ -253,6 +311,10 @@ onMounted(() => {
 .wrong-icon {
   background: rgba(217, 134, 0, 0.12);
   color: var(--accent);
+}
+.fav-icon {
+  background: rgba(229, 72, 77, 0.1);
+  color: var(--danger);
 }
 .row-main {
   flex: 1;

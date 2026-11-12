@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, BigInteger, Integer, String, Text, Integer, SmallInteger, DateTime, Numeric
+﻿from sqlalchemy import Column, BigInteger, Integer, String, Text, SmallInteger, DateTime, Numeric, UniqueConstraint
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -24,5 +24,21 @@ class WrongQuestion(Base):
     last_wrong_time = Column(DateTime, server_default=func.now())
     last_answer = Column(String(20))
     mastered = Column(SmallInteger, default=0)
+
+
+class QuestionMark(Base):
+    """学员对单题的收藏、文字笔记与画重点标注（按用户 + 题目唯一）"""
+    __tablename__ = "question_marks"
+    __table_args__ = (
+        UniqueConstraint("user_id", "question_id", name="uq_question_mark"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    question_id = Column(BigInteger, nullable=False, index=True)
+    is_favorite = Column(SmallInteger, default=0)
+    note = Column(Text)
+    annotation = Column(Text)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 

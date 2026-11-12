@@ -2,17 +2,17 @@ import re
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.wrong_dates import purge_old_wrongs, wrong_date_bounds
 from app.models.category import Category
-from app.models.practice import UserAnswer, WrongQuestion
+from app.models.practice import UserAnswer, WrongQuestion, QuestionMark
 from app.models.question import Question, QuestionOption
 from app.models.user import User
-from app.schemas.practice import AnswerResult, AnswerSubmit, PracticeStats
+from app.schemas.practice import AnswerResult, AnswerSubmit, PracticeStats, MarkUpdate, MarkOut
 
 router = APIRouter(prefix="/api/practice", tags=["刷题"])
 
@@ -153,6 +153,175 @@ def _question_payload(db: Session, q: Question):
         ],
         "correct_answer": correct,
     }
+
+
+def _mark_payload(mark: QuestionMark):
+    return {
+        "question_id": mark.question_id,
+        "is_favorite": bool(mark.is_favorite),
+        "note": mark.note or "",
+        "annotation": mark.annotation or "",
+        "updated_at": mark.updated_at,
+    }
+
+
+def _parse_question_ids(value: str):
+    ids = []
+    for part in (value or "").split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.append(int(part))
+    return ids
+
+
+@router.get("/marks", response_model=list[MarkOut])
+def list_marks(
+    question_ids: str = Query("", description="逗号分隔的题目ID，通常传当前这一批题"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ids = _parse_question_ids(question_ids)
+    if not ids:
+        return []
+    marks = db.query(QuestionMark).filter(
+        QuestionMark.user_id == current_user.id,
+        QuestionMark.question_id.in_(ids),
+    ).all()
+    return [_mark_payload(m) for m in marks]
+
+
+@router.put("/marks/{question_id}", response_model=MarkOut)
+def save_mark(
+    question_id: int,
+    payload: MarkUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = db.query(Question).filter(Question.id == question_id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="题目不存在")
+
+    mark = db.query(QuestionMark).filter(
+        QuestionMark.user_id == current_user.id,
+        QuestionMark.question_id == question_id,
+    ).first()
+    if not mark:
+        mark = QuestionMark(user_id=current_user.id, question_id=question_id)
+        db.add(mark)
+
+    data = payload.model_dump(exclude_unset=True)
+    if "is_favorite" in data:
+        mark.is_favorite = 1 if data["is_favorite"] else 0
+    if "note" in data:
+        mark.note = (data["note"] or "").strip() or None
+    if "annotation" in data:
+        mark.annotation = data["annotation"] or None
+
+    db.commit()
+    db.refresh(mark)
+    return _mark_payload(mark)
+
+
+@router.get("/favorites")
+def list_favorites(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = (
+        db.query(QuestionMark)
+        .join(Question, Question.id == QuestionMark.question_id)
+        .filter(
+            QuestionMark.user_id == current_user.id,
+            QuestionMark.is_favorite == 1,
+            Question.status == 1,
+        )
+    )
+    total = query.count()
+    rows = query.order_by(QuestionMark.updated_at.desc(), QuestionMark.id.desc()) \
+        .offset((page - 1) * page_size).limit(page_size).all()
+    names = _category_names(db)
+    items = []
+    for mark in rows:
+        q = db.query(Question).filter(Question.id == mark.question_id).first()
+        if not q:
+            continue
+        payload = _question_payload(db, q)
+        payload["category_name"] = names.get(q.category_id, "未分类")
+        payload["note"] = mark.note or ""
+        payload["annotation"] = mark.annotation or ""
+        items.append(payload)
+    return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+
+@router.get("/favorites/questions")
+def favorite_questions_for_practice(
+    count: int = Query(10, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """收藏复习按收藏时间倒序取题，学员可接着上次位置继续"""
+    query = (
+        db.query(QuestionMark)
+        .join(Question, Question.id == QuestionMark.question_id)
+        .filter(
+            QuestionMark.user_id == current_user.id,
+            QuestionMark.is_favorite == 1,
+            Question.status == 1,
+        )
+    )
+    rows = query.order_by(QuestionMark.updated_at.desc(), QuestionMark.id.desc()) \
+        .offset(offset).limit(count).all()
+    result = []
+    for mark in rows:
+        q = db.query(Question).filter(Question.id == mark.question_id).first()
+        if not q:
+            continue
+        payload = _question_payload(db, q)
+        payload["note"] = mark.note or ""
+        payload["annotation"] = mark.annotation or ""
+        result.append(payload)
+    return result
+
+
+@router.get("/search")
+def search_questions(
+    keyword: str = Query(..., min_length=1, description="题干或解析关键词"),
+    category_id: int | None = Query(None, description="分类ID，自动包含子分类"),
+    type: str | None = Query(None, description="题型"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """学员搜题：按题干/解析关键词搜索，结果可直接查看答案与解析"""
+    text = keyword.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="请输入搜索关键词")
+
+    query = db.query(Question).filter(Question.status == 1)
+    scope = _category_scope(db, category_id)
+    if scope:
+        query = query.filter(Question.category_id.in_(scope))
+    if type:
+        query = query.filter(Question.type == type)
+    query = query.filter(or_(
+        Question.content.contains(text),
+        Question.analysis.contains(text),
+    ))
+
+    total = query.count()
+    rows = query.order_by(Question.id.asc()) \
+        .offset((page - 1) * page_size).limit(page_size).all()
+    names = _category_names(db)
+    items = []
+    for q in rows:
+        payload = _question_payload(db, q)
+        payload["category_name"] = names.get(q.category_id, "未分类")
+        items.append(payload)
+    return {"total": total, "page": page, "page_size": page_size, "keyword": text, "items": items}
 
 
 @router.get("/wrong/list")

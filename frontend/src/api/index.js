@@ -65,7 +65,12 @@ export const practiceApi = {
   getWrongDetail: (questionId) => api.get(`/practice/wrong/${questionId}/detail`),
   markMastered: (questionId) => api.post(`/practice/wrong/${questionId}/master`),
   deleteWrong: (questionId) => api.delete(`/practice/wrong/${questionId}`),
-  getStats: () => api.get('/practice/stats')
+  getStats: () => api.get('/practice/stats'),
+  getMarks: (questionIds) => api.get('/practice/marks', { params: { question_ids: questionIds } }),
+  saveMark: (questionId, data) => api.put(`/practice/marks/${questionId}`, data),
+  getFavorites: (params) => api.get('/practice/favorites', { params }),
+  getFavoriteQuestions: (params) => api.get('/practice/favorites/questions', { params }),
+  searchQuestions: (params) => api.get('/practice/search', { params })
 }
 
 // ========== 公告接口 ==========

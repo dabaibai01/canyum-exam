@@ -528,7 +528,12 @@ def get_random_questions(
         options = db.query(QuestionOption).filter(
             QuestionOption.question_id == q.id
         ).order_by(QuestionOption.sort).all()
-        # 练习答题时不把正确答案下发给前端，判分统一走 /api/practice/submit
+        correct_answer = "".join(sorted(
+            o.label.strip().upper() for o in options if o.is_correct == 1
+        ))
+        # 学员端背题/读题需要正确答案；答题模式前端在提交前不会展示
+        q_data["correct_answer"] = correct_answer
+        # 练习答题时不把每个选项的正确标记下发给前端，判分统一走 /api/practice/submit
         q_data["options"] = [
             {"id": o.id, "label": o.label, "content": o.content, "is_correct": 0, "sort": o.sort}
             for o in options

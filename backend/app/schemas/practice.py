@@ -29,3 +29,17 @@ class PracticeStats(BaseModel):
     correct_count: int
     wrong_count: int
     accuracy: float
+
+
+class MarkUpdate(BaseModel):
+    is_favorite: bool | None = None
+    note: str | None = None
+    annotation: str | None = None
+
+
+class MarkOut(BaseModel):
+    question_id: int
+    is_favorite: bool
+    note: str | None = None
+    annotation: str | None = None
+    updated_at: datetime | None = None
