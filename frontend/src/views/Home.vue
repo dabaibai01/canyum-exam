@@ -266,7 +266,7 @@ onMounted(() => {
 
 <style scoped>
 .home-page {
-  padding-bottom: 30px;
+  padding-bottom: calc(var(--van-tabbar-height, 54px) + env(safe-area-inset-bottom) + 24px);
 }
 
 /* 渐变头部 */
