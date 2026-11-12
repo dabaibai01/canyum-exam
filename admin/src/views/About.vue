@@ -87,7 +87,7 @@ const history = [
 .about-title {
   font-size: 22px;
   font-weight: 700;
-  color: #1f2d3d;
+  color: var(--el-text-color-primary, #1f2d3d);
 }
 .about-sub {
   margin-top: 5px;
@@ -108,7 +108,7 @@ const history = [
   margin: 24px 0 12px;
   font-size: 15px;
   font-weight: 600;
-  color: #1f2d3d;
+  color: var(--el-text-color-primary, #1f2d3d);
   padding-left: 9px;
   border-left: 3px solid #409eff;
 }
