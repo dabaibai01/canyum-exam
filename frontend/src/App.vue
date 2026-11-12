@@ -19,7 +19,7 @@ const route = useRoute()
 const showTabbar = ref(true)
 const isDarkMode = ref(false)
 
-const HIDE_TABBAR = ['/login', '/practice/start', '/exam/start', '/change-password']
+const HIDE_TABBAR = ['/login', '/register', '/practice/start', '/exam/start', '/change-password']
 
 watch(
   () => route.path,

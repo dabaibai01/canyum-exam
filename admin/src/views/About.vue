@@ -2,16 +2,16 @@
   <div class="about-page">
     <el-card shadow="never" class="about-card">
       <div class="about-head">
-        <img :src="siteLogo()" alt="可以云码" class="about-logo" />
+        <img :src="siteLogo()" alt="铁刷客" class="about-logo" />
         <div>
           <div class="about-title">{{ site.site_name }}</div>
           <div class="about-sub">{{ site.site_subtitle }}</div>
         </div>
-        <el-tag type="success" effect="plain" class="version-tag">V1.1</el-tag>
+        <el-tag type="success" effect="plain" class="version-tag">V2.0</el-tag>
       </div>
 
       <el-descriptions :column="2" border class="about-desc">
-        <el-descriptions-item label="系统版本">V1.1（2026-11-11）</el-descriptions-item>
+        <el-descriptions-item label="系统版本">V2.0（2026-11-12）</el-descriptions-item>
         <el-descriptions-item label="开发者">{{ site.developer_name }}</el-descriptions-item>
         <el-descriptions-item label="技术架构">FastAPI + Vue 3 + SQLite</el-descriptions-item>
         <el-descriptions-item label="部署环境">Nginx + Supervisor，支持私有化部署</el-descriptions-item>
@@ -49,15 +49,16 @@
 import { site, siteLogo } from '../utils/site'
 
 const features = [
-  { title: '自己组卷自测', desc: '按专业、题型和数量生成个人自测卷，提交后计入成绩与统计。' },
-  { title: '错题组卷', desc: '按筛选条件抽错题，自选题量、分值和时长，专攻薄弱题。' },
-  { title: '顺序答题记忆', desc: '按账号和分类记住刷题位置，下次从上次的地方继续。' },
-  { title: '练习统计', desc: '刷题与考试分开统计，管理员账号同样计入。' },
-  { title: '批量导入题库', desc: '支持 Excel / CSV 一次导入，自动跳过重复题。' },
-  { title: '多选题 10 选项', desc: '选项从 A 到 J，满足多答案题型需要。' }
+  { title: '学员注册审核', desc: '学员可自助注册，管理员审核通过后才能登录使用。' },
+  { title: '智能答题切题', desc: '单选、判断答对自动下一题，答错停留；上一题 / 下一题按钮可在整套题中连续切换。' },
+  { title: '练习 / 考试双统计', desc: '刷题量与考试量分页查看，在线考试、自己组卷和管理员数据全部纳入。' },
+  { title: '题目级答题分析', desc: '按题目查看作答人数、正确率和错答分布，便于重点讲解与出题。' },
+  { title: '多模式学习', desc: '答题、背题、读题三种模式，支持收藏、笔记、画重点和关键词搜题。' },
+  { title: '组卷与题库', desc: '错题、收藏、自选组卷，支持 Excel / CSV 批量导入和 A 到 J 多选项。' }
 ]
 
 const history = [
+  { version: 'V2.0', date: '2026-11-12', content: '全新版本：学员注册审核、答对自动跳题与按钮连续切题、刷题/考试双统计（含考试、自己组卷、管理员）、题目级答题分析、收藏笔记标注、错题组卷、夜间模式与设置页完善。' },
   { version: 'V1.1', date: '2026-11-11', content: '统计拆分、管理员纳入统计、自己组卷、错题组卷、顺序记忆、批量导入、10 选项、品牌升级。' },
   { version: 'V1.0', date: '2026-11-09', content: '题库、刷题、错题本、在线考试、后台管理、学习资源等基础功能上线。' }
 ]

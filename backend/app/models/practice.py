@@ -24,6 +24,10 @@ class WrongQuestion(Base):
     last_wrong_time = Column(DateTime, server_default=func.now())
     last_answer = Column(String(20))
     mastered = Column(SmallInteger, default=0)
+    # 错题来源：practice=刷题，exam=在线考试/学员自测卷
+    source = Column(String(10), default="practice", index=True)
+    # 最近一次答错所属考试，便于错题本展示“来自哪场考试”
+    exam_id = Column(BigInteger, index=True)
 
 
 class QuestionMark(Base):

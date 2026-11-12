@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -16,6 +19,7 @@ def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     keyword: str | None = Query(None, description="搜索关键词"),
+    status: str | None = Query(None, description="pending/approved/rejected"),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
@@ -24,8 +28,20 @@ def list_users(
         query = query.filter(
             (User.username.contains(keyword)) | (User.real_name.contains(keyword))
         )
+    if status:
+        query = query.filter(User.status == status)
+
     total = query.count()
-    users = query.order_by(User.id).offset((page - 1) * page_size).limit(page_size).all()
+    # 待审核账号排在最前面，方便管理员及时处理
+    users = (
+        query.order_by(
+            case((User.status == "pending", 0), else_=1),
+            User.id.desc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
 
     result = []
     for u in users:
@@ -37,9 +53,17 @@ def list_users(
             "department": u.department,
             "position": u.position,
             "role": u.role,
+            "status": u.status,
+            "created_at": (u.created_at + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M")
+            if u.created_at
+            else "",
             "avatar": u.avatar,
         })
-    return {"total": total, "items": result}
+    return {
+        "total": total,
+        "pending_count": db.query(User).filter(User.status == "pending").count(),
+        "items": result,
+    }
 
 
 @router.get("/{user_id}")
@@ -59,6 +83,7 @@ def get_user(
         "department": user.department,
         "position": user.position,
         "role": user.role,
+        "status": user.status,
     }
 
 
@@ -88,6 +113,7 @@ def create_user(
         department=data.get("department"),
         position=data.get("position"),
         role="admin" if data.get("role") == "admin" else "user",
+        status="approved",
     )
     db.add(user)
     db.commit()
@@ -118,6 +144,31 @@ def update_user(
 
     db.commit()
     return {"message": "更新成功"}
+
+
+@router.post("/{user_id}/review")
+def review_user(
+    user_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    status = (data.get("status") or "").strip()
+    if status not in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="审核结果只能是通过或拒绝")
+    if user.role == "admin" and status == "rejected":
+        raise HTTPException(status_code=400, detail="不能拒绝管理员账号")
+
+    user.status = status
+    db.commit()
+    return {
+        "message": "审核通过" if status == "approved" else "已拒绝该注册申请",
+        "status": user.status,
+    }
 
 
 @router.delete("/{user_id}")

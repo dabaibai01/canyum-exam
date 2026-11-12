@@ -11,6 +11,14 @@ class User(Base):
     real_name = Column(String(50), nullable=False)
     phone = Column(String(20), index=True)
     role = Column(String(20), default="user")
+    status = Column(
+        String(20),
+        nullable=False,
+        default="approved",
+        server_default="approved",
+        index=True,
+        comment="pending=待审核, approved=已通过, rejected=已拒绝",
+    )
     department = Column(String(100))
     position = Column(String(100))
     avatar = Column(String(255))

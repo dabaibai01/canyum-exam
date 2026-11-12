@@ -19,6 +19,7 @@ const routes = [
       { path: 'practice-stats', redirect: '/practice-stats/practice' },
       { path: 'practice-stats/practice', component: () => import('./views/PracticeStats.vue'), props: { mode: 'practice' } },
       { path: 'practice-stats/exam', component: () => import('./views/PracticeStats.vue'), props: { mode: 'exam' } },
+      { path: 'practice-stats/question', component: () => import('./views/QuestionAnalysis.vue') },
       { path: 'categories', component: () => import('./views/CategoryList.vue') },
       { path: 'exams', component: () => import('./views/ExamList.vue') },
       { path: 'users', component: () => import('./views/UserList.vue') },

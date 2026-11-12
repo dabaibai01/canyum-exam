@@ -12,7 +12,7 @@
 
           <el-form :model="form" label-width="96px" label-position="left">
             <el-form-item label="系统名称">
-              <el-input v-model="form.site_name" maxlength="40" show-word-limit placeholder="可以云码考试系统" />
+              <el-input v-model="form.site_name" maxlength="40" show-word-limit placeholder="铁刷客考试系统" />
             </el-form-item>
             <el-form-item label="副标题">
               <el-input v-model="form.site_subtitle" maxlength="80" show-word-limit placeholder="考试 · 刷题 · 组卷" />
@@ -76,11 +76,11 @@
           <div class="preview-hero">
             <img :src="form.logo_url || defaultLogo" alt="Logo 预览" class="preview-logo" />
             <div>
-              <div class="preview-name">{{ form.site_name || '可以云码考试系统' }}</div>
+              <div class="preview-name">{{ form.site_name || '铁刷客考试系统' }}</div>
               <div class="preview-sub">{{ form.site_subtitle || '考试 · 刷题 · 组卷' }}</div>
             </div>
           </div>
-          <div class="preview-foot">{{ site.footer_text || '可以云码考试系统' }}</div>
+          <div class="preview-foot">{{ site.footer_text || '铁刷客考试系统' }}</div>
         </el-card>
       </el-col>
     </el-row>

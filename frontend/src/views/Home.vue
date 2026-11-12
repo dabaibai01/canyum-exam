@@ -4,7 +4,7 @@
     <div class="hero">
       <div class="hero-top">
         <div class="hero-brand-row">
-          <img :src="siteLogo()" alt="可以云码" class="hero-logo" />
+          <img :src="siteLogo()" alt="铁刷客" class="hero-logo" />
           <div>
             <div class="hero-brand-name">{{ site.site_name }}</div>
             <div class="hero-hello">你好，{{ userName }}</div>
@@ -123,10 +123,10 @@
             <div class="meta-row"><span>岗位</span><span>{{ userInfo.position || '未设置' }}</span></div>
           </div>
           <div class="profile-about">
-            <img :src="siteLogo()" alt="可以云码" class="about-logo" />
+            <img :src="siteLogo()" alt="铁刷客" class="about-logo" />
             <div class="about-text">
               <b>{{ site.site_name }}</b>
-              <span>版本 V1.1 · 2026-11-11</span>
+              <span>版本 V2.0 · 2026-11-12</span>
               <span>开发：{{ site.developer_name }}</span>
             </div>
           </div>

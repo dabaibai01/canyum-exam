@@ -2,7 +2,7 @@
   <el-container style="height: 100vh">
     <el-aside width="200px" class="admin-aside" style="background-color: #304156">
       <div class="side-brand">
-        <img :src="siteLogo()" alt="可以云码" class="side-logo" />
+        <img :src="siteLogo()" alt="铁刷客" class="side-logo" />
         <div>
           <div class="side-name">{{ shortName }}</div>
           <div class="side-sub">{{ site.site_subtitle }} · 管理后台</div>
@@ -36,6 +36,7 @@
           </template>
           <el-menu-item index="/practice-stats/practice">刷题统计</el-menu-item>
           <el-menu-item index="/practice-stats/exam">考试统计</el-menu-item>
+          <el-menu-item index="/practice-stats/question">题目分析</el-menu-item>
         </el-sub-menu>
         <el-menu-item index="/exams">
           <el-icon><Document /></el-icon>
@@ -64,7 +65,7 @@
       </el-menu>
       <div class="side-bottom">
         <router-link to="/about" class="about-link">关于系统</router-link>
-        <div class="side-version">V1.1 · {{ site.developer_name }}</div>
+        <div class="side-version">V2.0 · {{ site.developer_name }}</div>
       </div>
     </el-aside>
 
@@ -123,7 +124,7 @@ import { site, siteLogo } from '../utils/site'
 
 const router = useRouter()
 const route = useRoute()
-const shortName = computed(() => site.site_name.replace(/考试系统$/, '') || '可以云码')
+const shortName = computed(() => site.site_name.replace(/考试系统$/, '') || '铁刷客')
 
 const isDarkMode = ref(false)
 const adminName = ref('管理员')

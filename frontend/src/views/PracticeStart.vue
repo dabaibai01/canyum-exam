@@ -47,7 +47,10 @@
       </div>
     </div>
 
-    <div v-else-if="currentQuestion" class="question-container">
+    <div
+      v-else-if="currentQuestion"
+      class="question-container"
+    >
       <div class="progress-row">
         <div class="progress-pill" @click="openAnswerCard">
           <b>{{ progressIndex }}</b><span>/ {{ progressTotal }}</span>
@@ -59,6 +62,8 @@
       </div>
 
       <div ref="surfaceRef" class="annotation-surface">
+        <Transition :name="slideName" mode="out-in">
+          <div :key="currentQuestion.id" class="question-slide">
         <div class="question-card card">
           <div class="question-type">
             <span class="type-pill">{{ questionTypeText(currentQuestion.type) }}</span>
@@ -120,6 +125,8 @@
           @pointerup="onPointerUp"
           @pointerleave="onPointerUp"
         />
+          </div>
+        </Transition>
       </div>
 
       <div v-if="annotating" class="annotate-toolbar">
@@ -173,9 +180,14 @@
         >
           提交答案
         </van-button>
-        <van-button v-else type="primary" round block @click="nextQuestion">
-          {{ currentIndex === questions.length - 1 ? '完成本组' : '下一题' }}
-        </van-button>
+        <div class="question-nav">
+          <van-button plain round block icon="arrow-left" @click="prevQuestion">
+            上一题
+          </van-button>
+          <van-button plain round block icon="arrow" icon-position="right" @click="nextQuestion">
+            下一题
+          </van-button>
+        </div>
       </div>
 
       <div class="practice-bottom">
@@ -265,6 +277,7 @@ const loadingBatch = ref(false)
 const correctCount = ref(0)
 const wrongCount = ref(0)
 const modeType = ref('answer')
+const slideDirection = ref('next')
 
 const cardVisible = ref(false)
 const jumpText = ref('')
@@ -277,6 +290,7 @@ const strokes = ref([])
 const redoStack = ref([])
 let drawing = false
 let activeStroke = null
+let autoNextTimer = null
 
 const modeOptions = [
   { key: 'answer', label: '答题' },
@@ -302,11 +316,13 @@ const wrongFilter = {
   type: route.query.type || '',
   status: route.query.status || 'pending',
   sort: route.query.sort || 'count',
+  source: route.query.wrong_source || '',
   start_date: route.query.start_date || '',
   end_date: route.query.end_date || ''
 }
 
 const isMultiple = computed(() => currentQuestion.value?.type === 'multiple')
+const slideName = computed(() => slideDirection.value === 'prev' ? 'slide-prev' : 'slide-next')
 const answerState = computed(() => currentQuestion.value ? answerStates.value[currentQuestion.value.id] : null)
 const showResult = computed(() => !!answerState.value)
 const showAnswer = computed(() => modeType.value !== 'answer' || showResult.value)
@@ -356,7 +372,9 @@ const loadMarks = async () => {
   }
 }
 
-const loadQuestions = async (keepStats = false) => {
+const loadQuestions = async (keepStats = false, options = {}) => {
+  const { targetIndex = 0, direction = 'next', fallbackOnEmpty = true } = options
+  clearAutoNext()
   loadingBatch.value = true
   if (!keepStats) {
     correctCount.value = 0
@@ -374,18 +392,21 @@ const loadQuestions = async (keepStats = false) => {
         type: wrongFilter.type || undefined,
         status: wrongFilter.status,
         sort: wrongFilter.sort,
+        source: wrongFilter.source || undefined,
         start_date: wrongFilter.start_date || undefined,
         end_date: wrongFilter.end_date || undefined,
         count: 10,
         offset: offset.value
       })
       if (list.length === 0 && offset.value > 0) {
+        if (!fallbackOnEmpty) return false
         offset.value = 0
         list = await practiceApi.getWrongQuestions({
           category_id: wrongFilter.category_id || undefined,
           type: wrongFilter.type || undefined,
           status: wrongFilter.status,
           sort: wrongFilter.sort,
+          source: wrongFilter.source || undefined,
           start_date: wrongFilter.start_date || undefined,
           end_date: wrongFilter.end_date || undefined,
           count: 10,
@@ -395,6 +416,7 @@ const loadQuestions = async (keepStats = false) => {
     } else if (isFavoriteSource) {
       list = await practiceApi.getFavoriteQuestions({ count: 10, offset: offset.value })
       if (list.length === 0 && offset.value > 0) {
+        if (!fallbackOnEmpty) return false
         offset.value = 0
         list = await practiceApi.getFavoriteQuestions({ count: 10, offset: 0 })
       }
@@ -411,6 +433,7 @@ const loadQuestions = async (keepStats = false) => {
         list.forEach(q => seenIds.value.push(q.id))
       }
       if (list.length === 0 && offset.value > 0) {
+        if (!fallbackOnEmpty) return false
         offset.value = 0
         if (mode === 'order') savePracticeOffset(currentCategory, 0)
         const again = await questionApi.getRandomQuestions(currentCategory, 10, mode, 0)
@@ -419,14 +442,20 @@ const loadQuestions = async (keepStats = false) => {
       }
     }
 
+    const nextIndex = targetIndex === -1
+      ? Math.max(list.length - 1, 0)
+      : Math.min(Math.max(targetIndex, 0), Math.max(list.length - 1, 0))
     questions.value = list
-    currentIndex.value = 0
+    currentIndex.value = nextIndex
+    slideDirection.value = direction
     answerStates.value = {}
     selected.value = []
-    currentQuestion.value = list.length > 0 ? list[0] : null
+    currentQuestion.value = list.length > 0 ? list[nextIndex] : null
     await loadMarks()
+    return true
   } catch (error) {
     showToast('加载题目失败')
+    return false
   } finally {
     loaded.value = true
     loadingBatch.value = false
@@ -437,6 +466,39 @@ const restoreSelection = () => {
   const q = currentQuestion.value
   const state = q ? answerStates.value[q.id] : null
   selected.value = state ? [...state.selected] : []
+}
+
+const loadAdjacentBatch = async (direction) => {
+  if (loadingBatch.value) return false
+  if (mode !== 'order' && !isWrongSource && !isFavoriteSource) return false
+  const batchSize = questions.value.length || 10
+  if (
+    direction === 'next' &&
+    mode === 'order' &&
+    totalQuestions > 0 &&
+    offset.value + batchSize >= totalQuestions
+  ) {
+    return false
+  }
+  if (direction === 'prev' && offset.value <= 0) return false
+
+  const previousOffset = offset.value
+  offset.value = direction === 'next'
+    ? offset.value + batchSize
+    : Math.max(0, offset.value - batchSize)
+  const ok = await loadQuestions(true, {
+    targetIndex: direction === 'prev' ? -1 : 0,
+    direction,
+    fallbackOnEmpty: false
+  })
+  if (!ok) {
+    offset.value = previousOffset
+    return false
+  }
+  if (mode === 'order' && direction === 'next') {
+    savePracticeOffset(currentCategory, offset.value)
+  }
+  return true
 }
 
 const nextBatch = () => {
@@ -462,6 +524,7 @@ const questionTypeText = (type) => {
 }
 
 const switchMode = (type) => {
+  clearAutoNext()
   modeType.value = type
   annotating.value = false
   if (type === 'answer') restoreSelection()
@@ -502,6 +565,21 @@ const formatAnswer = (answer) => {
   return answer.split('').join(' ')
 }
 
+const clearAutoNext = () => {
+  if (autoNextTimer) {
+    clearTimeout(autoNextTimer)
+    autoNextTimer = null
+  }
+}
+
+const scheduleAutoNext = () => {
+  clearAutoNext()
+  autoNextTimer = setTimeout(() => {
+    autoNextTimer = null
+    nextQuestion()
+  }, 450)
+}
+
 const submitAnswer = async () => {
   if (!currentQuestion.value || selected.value.length === 0) return
   try {
@@ -520,20 +598,38 @@ const submitAnswer = async () => {
     if (!isWrongSource && !isFavoriteSource && mode === 'order') {
       savePracticeOffset(currentCategory, offset.value + currentIndex.value + 1)
     }
+    const currentType = currentQuestion.value.type
+    if (res.is_correct && (currentType === 'single' || currentType === 'judge')) {
+      scheduleAutoNext()
+    }
   } catch (error) {
     showToast('提交失败')
   }
 }
 
-const nextQuestion = () => {
+const nextQuestion = async () => {
+  clearAutoNext()
+  if (loadingBatch.value) return
+  slideDirection.value = 'next'
   if (currentIndex.value >= questions.value.length - 1) {
-    finished.value = true
-    if (!isWrongSource && !isFavoriteSource && mode === 'order') {
-      savePracticeOffset(currentCategory, offset.value + questions.value.length)
-    }
+    await loadAdjacentBatch('next')
     return
   }
   currentIndex.value++
+  currentQuestion.value = questions.value[currentIndex.value]
+  restoreSelection()
+  annotating.value = false
+}
+
+const prevQuestion = async () => {
+  clearAutoNext()
+  if (loadingBatch.value) return
+  if (currentIndex.value <= 0) {
+    await loadAdjacentBatch('prev')
+    return
+  }
+  slideDirection.value = 'prev'
+  currentIndex.value--
   currentQuestion.value = questions.value[currentIndex.value]
   restoreSelection()
   annotating.value = false
@@ -567,6 +663,8 @@ const cellClass = (index) => {
 
 const jumpToIndex = (index) => {
   if (index < 0 || index >= questions.value.length) return
+  clearAutoNext()
+  slideDirection.value = index > currentIndex.value ? 'next' : 'prev'
   currentIndex.value = index
   currentQuestion.value = questions.value[index]
   restoreSelection()
@@ -775,6 +873,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearAutoNext()
   persistPosition()
   window.removeEventListener('resize', onResize)
 })
@@ -868,6 +967,40 @@ onBeforeUnmount(() => {
 
 .annotation-surface {
   position: relative;
+}
+.question-slide {
+  min-height: 1px;
+}
+.slide-next-enter-active,
+.slide-next-leave-active,
+.slide-prev-enter-active,
+.slide-prev-leave-active {
+  transition: opacity 0.22s ease, transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform, opacity;
+}
+.slide-next-enter-from {
+  opacity: 0;
+  transform: translateY(30px);
+}
+.slide-next-leave-to {
+  opacity: 0;
+  transform: translateY(-16px);
+}
+.slide-prev-enter-from {
+  opacity: 0;
+  transform: translateY(-30px);
+}
+.slide-prev-leave-to {
+  opacity: 0;
+  transform: translateY(16px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide-next-enter-active,
+  .slide-next-leave-active,
+  .slide-prev-enter-active,
+  .slide-prev-leave-active {
+    transition: none;
+  }
 }
 .question-card {
   padding: 16px;
@@ -1090,6 +1223,17 @@ onBeforeUnmount(() => {
 
 .action-buttons {
   margin-top: 18px;
+}
+
+.question-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.question-nav :deep(.van-button) {
+  height: 42px;
 }
 
 .practice-bottom {

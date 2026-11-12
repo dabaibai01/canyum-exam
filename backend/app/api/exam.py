@@ -10,7 +10,7 @@ from app.core.deps import get_current_user, require_admin
 from app.core.wrong_dates import purge_old_wrongs, wrong_date_bounds
 from app.models.category import Category
 from app.models.exam import Exam, ExamAttempt, ExamQuestion
-from app.models.practice import UserAnswer, WrongQuestion
+from app.models.practice import UserAnswer, WrongQuestion, QuestionMark
 from app.models.question import Question, QuestionOption
 from app.models.user import User
 from app.schemas.exam import ComposeItem, ExamCreate, ExamOut, SelfCompose
@@ -158,6 +158,10 @@ def _wrong_rows(db: Session, user_id: int, data: SelfCompose) -> list[tuple[int,
         .join(Question, WrongQuestion.question_id == Question.id)
         .filter(WrongQuestion.user_id == user_id, Question.status == 1)
     )
+    if data.wrong_source == "practice":
+        query = query.filter(WrongQuestion.source == "practice")
+    elif data.wrong_source == "exam":
+        query = query.filter(WrongQuestion.source == "exam")
     if data.wrong_status == "pending":
         query = query.filter(WrongQuestion.mastered == 0)
     elif data.wrong_status == "mastered":
@@ -188,13 +192,38 @@ def _wrong_rows(db: Session, user_id: int, data: SelfCompose) -> list[tuple[int,
     return [(int(item.question_id), round(score, 1)) for item, _question in rows]
 
 
+def _favorite_rows(db: Session, user_id: int, data: SelfCompose) -> list[tuple[int, float]]:
+    """从收藏夹抽题，按收藏时间倒序；收藏题组卷与错题组卷共用数量和分值规则"""
+    query = (
+        db.query(QuestionMark, Question)
+        .join(Question, QuestionMark.question_id == Question.id)
+        .filter(
+            QuestionMark.user_id == user_id,
+            QuestionMark.is_favorite == 1,
+            Question.status == 1,
+        )
+    )
+    if data.favorite_type:
+        query = query.filter(Question.type == data.favorite_type)
+    if data.category_id and data.category_id > 0:
+        child_ids = [
+            c.id for c in db.query(Category).filter(Category.parent_id == data.category_id).all()
+        ]
+        query = query.filter(Question.category_id.in_([data.category_id] + child_ids))
+    query = query.order_by(QuestionMark.updated_at.desc(), QuestionMark.id.desc())
+    limit = min(max(int(data.count or 0), 1), 100)
+    score = min(max(float(data.score or 1.0), 0.5), 10.0)
+    rows = query.limit(limit).all()
+    return [(int(question.id), round(score, 1)) for _mark, question in rows]
+
+
 @router.post("/self-compose", response_model=ExamOut)
 def create_self_exam(
     data: SelfCompose,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """学员自测组卷：source=bank 按题型从题库抽题；source=wrong 只抽错题"""
+    """学员自测组卷：source=bank 按题型从题库抽题；source=wrong 只抽错题；source=favorite 只抽收藏题"""
     if data.source == "wrong":
         purge_old_wrongs(db, current_user.id)
         rows = _wrong_rows(db, current_user.id, data)
@@ -202,6 +231,12 @@ def create_self_exam(
             raise HTTPException(status_code=400, detail="当前筛选条件下没有错题，先去刷题积累错题吧")
         default_title = f"错题自测卷 · {datetime.now().strftime('%m-%d %H:%M')}"
         description = "学员从错题本自建的专项自测卷"
+    elif data.source == "favorite":
+        rows = _favorite_rows(db, current_user.id, data)
+        if not rows:
+            raise HTTPException(status_code=400, detail="还没有收藏题目，刷题时点底部星标即可收藏")
+        default_title = f"收藏题自测卷 · {datetime.now().strftime('%m-%d %H:%M')}"
+        description = "学员从收藏夹自建的重点题自测卷"
     else:
         items = [i for i in data.compose if i.count and i.count > 0]
         if not items:
@@ -566,6 +601,31 @@ def submit_exam(
             is_correct=1 if is_correct else 0,
             score=score
         ))
+
+        # 考试答错也进入错题本，来源记为 exam；答对则把该题标为已掌握
+        existing_wrong = db.query(WrongQuestion).filter(
+            WrongQuestion.user_id == current_user.id,
+            WrongQuestion.question_id == qid,
+        ).first()
+        if not is_correct:
+            if existing_wrong:
+                existing_wrong.wrong_count += 1
+                existing_wrong.last_wrong_time = func.now()
+                existing_wrong.last_answer = user_answer
+                existing_wrong.mastered = 0
+                existing_wrong.source = "exam"
+                existing_wrong.exam_id = exam_id
+            else:
+                db.add(WrongQuestion(
+                    user_id=current_user.id,
+                    question_id=qid,
+                    wrong_count=1,
+                    last_answer=user_answer,
+                    source="exam",
+                    exam_id=exam_id,
+                ))
+        elif existing_wrong:
+            existing_wrong.mastered = 1
 
         total_score += score
         if is_correct:

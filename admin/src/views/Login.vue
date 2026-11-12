@@ -2,7 +2,7 @@
   <div class="login-wrap">
     <el-card class="login-card">
       <div class="login-brand">
-        <img :src="siteLogo()" alt="可以云码" class="login-logo" />
+        <img :src="siteLogo()" alt="铁刷客" class="login-logo" />
         <div>
           <div class="login-title">{{ site.site_name }}</div>
           <div class="login-sub">{{ site.site_subtitle }} · 管理后台</div>
@@ -30,7 +30,7 @@
         </el-form-item>
       </el-form>
       <div class="login-tip">仅管理员账号可登录，学员请使用学员端</div>
-      <div class="login-dev">V1.1 · {{ site.developer_name }}</div>
+      <div class="login-dev">V2.0 · {{ site.developer_name }}</div>
     </el-card>
   </div>
 </template>

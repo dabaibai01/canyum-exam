@@ -76,6 +76,32 @@ export const uploadApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000
     })
+  },
+  video: (file, onProgress) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post('/upload/video', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) {
+          onProgress(Math.round((event.loaded * 100) / event.total))
+        }
+      }
+    })
+  },
+  book: (file, onProgress) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post('/upload/book', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) {
+          onProgress(Math.round((event.loaded * 100) / event.total))
+        }
+      }
+    })
   }
 }
 
@@ -83,7 +109,8 @@ export const uploadApi = {
 export const statsApi = {
   getDashboard: () => api.get('/stats/dashboard'),
   getPracticeUsers: (params) => api.get('/stats/practice-users', { params }),
-  getExamUsers: (params) => api.get('/stats/exam-users', { params })
+  getExamUsers: (params) => api.get('/stats/exam-users', { params }),
+  getQuestionAnalysis: (params) => api.get('/stats/question-analysis', { params })
 }
 
 // ========== 用户接口 ==========
@@ -92,6 +119,7 @@ export const userApi = {
   getUser: (id) => api.get(`/users/${id}`),
   createUser: (data) => api.post('/users/', data),
   updateUser: (id, data) => api.put(`/users/${id}`, data),
+  reviewUser: (id, status) => api.post(`/users/${id}/review`, { status }),
   deleteUser: (id) => api.delete(`/users/${id}`),
   changePassword: (data) => api.post('/users/change-password', data)
 }

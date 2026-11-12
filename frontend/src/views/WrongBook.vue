@@ -30,6 +30,10 @@
         <span>{{ typeText }}</span>
         <van-icon name="arrow-down" size="12" />
       </div>
+      <div class="filter-item" :class="{ on: source }" @click="openSource">
+        <span>{{ sourceText }}</span>
+        <van-icon name="records" size="12" />
+      </div>
       <div class="filter-item" :class="{ on: dateStart && dateEnd }" @click="openDate">
         <span>{{ dateText }}</span>
         <van-icon name="calendar-o" size="12" />
@@ -56,10 +60,24 @@
         <div class="card-top">
           <van-tag :type="typeTag(item.type)" size="mini" plain>{{ typeLabel(item.type) }}</van-tag>
           <span class="cat">{{ item.category_name }}</span>
+          <van-tag
+            v-if="item.source === 'exam'"
+            type="warning"
+            size="mini"
+            plain
+          >考试</van-tag>
+          <van-tag v-else type="primary" size="mini" plain>刷题</van-tag>
           <van-tag v-if="item.mastered" type="success" size="mini">已掌握</van-tag>
           <van-tag v-else type="danger" size="mini" plain>待复习</van-tag>
+          <van-icon
+            :name="item.is_favorite ? 'star' : 'star-o'"
+            class="fav-icon"
+            :class="{ active: item.is_favorite }"
+            @click.stop="toggleCardFavorite(item)"
+          />
         </div>
         <div class="card-content">{{ item.content }}</div>
+        <div v-if="item.exam_title" class="card-exam">来自考试：{{ item.exam_title }}</div>
         <div class="card-bottom">
           <span>错 {{ item.wrong_count }} 次</span>
           <span>{{ formatTime(item.last_wrong_time) }}</span>
@@ -164,6 +182,19 @@
       />
     </van-popup>
 
+    <!-- 来源筛选：刷题错题 / 考试错题 -->
+    <van-popup v-model:show="showSource" position="bottom" round>
+      <div class="popup-title">按错题来源筛选</div>
+      <van-cell
+        v-for="opt in sourceOptions"
+        :key="opt.value"
+        :title="opt.text"
+        clickable
+        :class="{ 'type-active': source === opt.value }"
+        @click="pickSource(opt)"
+      />
+    </van-popup>
+
     <!-- 错题详情 -->
     <van-popup v-model:show="showDetail" position="bottom" round class="detail-popup">
       <div class="detail-head">
@@ -173,10 +204,13 @@
       <div v-if="detail" class="detail-body">
         <div class="detail-meta">
           <van-tag :type="typeTag(detail.type)" size="mini" plain>{{ typeLabel(detail.type) }}</van-tag>
+          <van-tag v-if="detail.source === 'exam'" type="warning" size="mini" plain>考试错题</van-tag>
+          <van-tag v-else type="primary" size="mini" plain>刷题错题</van-tag>
           <span>{{ detail.category_name }}</span>
           <span>错 {{ detail.wrong_count }} 次</span>
           <van-tag v-if="detail.mastered" type="success" size="mini">已掌握</van-tag>
         </div>
+        <div v-if="detail.exam_title" class="detail-exam">来自考试：{{ detail.exam_title }}</div>
         <div class="detail-content">{{ detail.content }}</div>
         <img
           v-if="detail.image"
@@ -208,6 +242,13 @@
         </div>
       </div>
       <div class="detail-actions">
+        <van-button
+          :type="detail?.is_favorite ? 'warning' : 'default'"
+          plain
+          @click="toggleDetailFavorite"
+        >
+          {{ detail?.is_favorite ? '已收藏' : '收藏' }}
+        </van-button>
         <van-button v-if="detail && !detail.mastered" type="success" plain @click="markMastered">
           标记已掌握
         </van-button>
@@ -265,16 +306,18 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showToast, showConfirmDialog, showImagePreview } from 'vant'
 import { practiceApi, questionApi, examApi } from '../api'
 
 const router = useRouter()
+const route = useRoute()
 
 const status = ref('pending')
 const categoryId = ref(0)
 const categoryName = ref('全部分类')
 const type = ref('')
+const source = ref(route.query.source === 'exam' ? 'exam' : '')
 const sort = ref('recent')
 const keyword = ref('')
 const dateStart = ref('')
@@ -294,6 +337,7 @@ const finished = ref(false)
 
 const showCategory = ref(false)
 const showType = ref(false)
+const showSource = ref(false)
 const showDetail = ref(false)
 const detail = ref(null)
 
@@ -322,6 +366,14 @@ const typeOptions = [
 ]
 
 const typeText = computed(() => typeOptions.find(o => o.value === type.value)?.text || '全部题型')
+
+const sourceOptions = [
+  { text: '全部来源', value: '' },
+  { text: '刷题错题', value: 'practice' },
+  { text: '考试错题', value: 'exam' }
+]
+
+const sourceText = computed(() => sourceOptions.find(o => o.value === source.value)?.text || '全部来源')
 
 const emptyText = computed(() => {
   if (dateStart.value && dateEnd.value) return '这个日期范围内没有错题'
@@ -425,6 +477,7 @@ const loadPage = async () => {
       sort: sort.value,
       category_id: categoryId.value || undefined,
       type: type.value || undefined,
+      source: source.value || undefined,
       keyword: keyword.value.trim() || undefined,
       ...dateQuery.value
     })
@@ -468,6 +521,9 @@ const openCategory = () => {
 const openType = () => {
   showType.value = true
 }
+const openSource = () => {
+  showSource.value = true
+}
 const toggleSort = () => {
   sort.value = sort.value === 'count' ? 'recent' : 'count'
   reload()
@@ -486,12 +542,47 @@ const pickType = (opt) => {
   reload()
 }
 
+const pickSource = (opt) => {
+  source.value = opt.value
+  showSource.value = false
+  reload()
+}
+
 const openDetail = async (item) => {
   try {
     detail.value = await practiceApi.getWrongDetail(item.question_id)
     showDetail.value = true
   } catch (error) {
     showToast('加载详情失败')
+  }
+}
+
+const toggleCardFavorite = async (item) => {
+  const next = !item.is_favorite
+  item.is_favorite = next
+  try {
+    await practiceApi.saveMark(item.question_id, { is_favorite: next })
+    if (detail.value && detail.value.question_id === item.question_id) {
+      detail.value.is_favorite = next
+    }
+    showToast(next ? '已加入收藏' : '已取消收藏')
+  } catch (error) {
+    item.is_favorite = !next
+    showToast('收藏操作失败')
+  }
+}
+
+const toggleDetailFavorite = async () => {
+  if (!detail.value) return
+  const next = !detail.value.is_favorite
+  try {
+    await practiceApi.saveMark(detail.value.question_id, { is_favorite: next })
+    detail.value.is_favorite = next
+    const row = list.value.find(x => x.question_id === detail.value.question_id)
+    if (row) row.is_favorite = next
+    showToast(next ? '已加入收藏，可在收藏夹组卷' : '已取消收藏')
+  } catch (error) {
+    showToast('收藏操作失败')
   }
 }
 
@@ -536,6 +627,7 @@ const redoWrong = () => {
   starting.value = true
   const query = {
     source: 'wrong',
+    wrong_source: source.value || undefined,
     category: categoryId.value || 0,
     type: type.value || '',
     status: status.value,
@@ -575,6 +667,7 @@ const submitWrongCompose = async () => {
       wrong_type: type.value || undefined,
       wrong_status: status.value,
       wrong_sort: sort.value,
+      wrong_source: source.value || undefined,
       count,
       score: Number(composeForm.value.score || 1),
       duration: Number(composeForm.value.duration || 30),
@@ -736,6 +829,24 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.fav-icon {
+  flex: none;
+  margin-left: 4px;
+  font-size: 19px;
+  color: var(--text-tertiary);
+  padding: 2px;
+}
+.fav-icon.active {
+  color: #ffb300;
+}
+.card-exam {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .card-content {
   margin-top: 8px;
   font-size: 14px;
@@ -835,6 +946,11 @@ onMounted(() => {
   font-size: 15px;
   line-height: 1.65;
   color: var(--text-color);
+}
+.detail-exam {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 .detail-image {
   display: block;

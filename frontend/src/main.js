@@ -9,6 +9,7 @@ const routes = [
   { path: '/', redirect: '/home' },
   { path: '/home', component: () => import('./views/Home.vue') },
   { path: '/login', component: () => import('./views/Login.vue') },
+  { path: '/register', component: () => import('./views/Register.vue') },
   { path: '/change-password', component: () => import('./views/ChangePassword.vue') },
   { path: '/practice', component: () => import('./views/Practice.vue') },
   { path: '/practice/search', component: () => import('./views/PracticeSearch.vue') },
@@ -27,7 +28,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (to.path === '/login') return true
+  if (to.path === '/login' || to.path === '/register') return true
   if (!localStorage.getItem('token')) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }

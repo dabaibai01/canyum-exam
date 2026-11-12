@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -9,7 +9,7 @@ from app.core.deps import require_admin
 from app.models.category import Category
 from app.models.exam import Exam
 from app.models.practice import UserAnswer
-from app.models.question import Question
+from app.models.question import Question, QuestionOption
 from app.models.user import User
 
 router = APIRouter(prefix="/api/stats", tags=["统计"])
@@ -97,6 +97,17 @@ def _collect_user_stats(
                 User.department.contains(kw),
             )
         )
+
+    # 必须按“用户 + 日期 + 专业 + 考试”分组，否则聚合函数会把全部作答合成一行，
+    # 导致页面上只显示某个用户/某场考试的汇总数据。
+    group_cols = [
+        UserAnswer.user_id,
+        func.date(_local_time(UserAnswer.answer_time)),
+        Question.category_id,
+    ]
+    if scope == "exam":
+        group_cols.append(UserAnswer.exam_id)
+    query = query.group_by(*group_cols)
 
     rows = query.all()
 
@@ -205,6 +216,208 @@ def exam_users(
     return _collect_user_stats(
         db, "exam", start_date, end_date, keyword, category_id, page, page_size
     )
+
+
+@router.get("/question-analysis", dependencies=[Depends(require_admin)])
+def question_analysis(
+    start_date: str | None = Query(None, description="开始日期 YYYY-MM-DD，默认近 7 天"),
+    end_date: str | None = Query(None, description="结束日期 YYYY-MM-DD，默认今天"),
+    category_id: int | None = Query(None, description="专业大类 ID，0 表示全部"),
+    type: str | None = Query(None, description="题型"),
+    source: str = Query("all", description="all 全部 / practice 刷题 / exam 考试"),
+    keyword: str | None = Query(None, description="题干关键词"),
+    sort: str = Query("wrong_count", description="wrong_count 错得最多 / wrong_rate 错误率最高 / answered 作答最多"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """管理端：按题目维度聚合考试与刷题的作答情况，找出高频错题。"""
+    today = datetime.now().date()
+    start_day = _parse_day(start_date, today - timedelta(days=6))
+    end_day = _parse_day(end_date, today)
+    if end_day < start_day:
+        raise HTTPException(status_code=400, detail="结束日期不能早于开始日期")
+
+    start_dt = datetime(start_day.year, start_day.month, start_day.day)
+    end_dt = datetime(end_day.year, end_day.month, end_day.day) + timedelta(days=1)
+
+    filters = [
+        _local_time(UserAnswer.answer_time) >= start_dt,
+        _local_time(UserAnswer.answer_time) < end_dt,
+    ]
+    if source == "practice":
+        filters.append(UserAnswer.exam_id.is_(None))
+    elif source == "exam":
+        filters.append(UserAnswer.exam_id.is_not(None))
+
+    query = (
+        db.query(Question, UserAnswer)
+        .join(Question, UserAnswer.question_id == Question.id)
+        .filter(*filters)
+    )
+    if category_id and category_id > 0:
+        child_ids = [
+            c.id for c in db.query(Category).filter(Category.parent_id == category_id).all()
+        ]
+        query = query.filter(Question.category_id.in_([category_id] + child_ids))
+    if type:
+        query = query.filter(Question.type == type)
+    if keyword and keyword.strip():
+        query = query.filter(Question.content.contains(keyword.strip()))
+
+    rows = (
+        db.query(
+            UserAnswer.question_id,
+            func.count(UserAnswer.id).label("answered"),
+            func.sum(case((UserAnswer.is_correct == 1, 1), else_=0)).label("correct"),
+            func.count(func.distinct(UserAnswer.user_id)).label("users"),
+            func.sum(case((UserAnswer.exam_id.is_(None), 1), else_=0)).label("practice_answered"),
+            func.sum(case((UserAnswer.exam_id.is_not(None), 1), else_=0)).label("exam_answered"),
+            func.sum(case((and_(UserAnswer.exam_id.is_(None), UserAnswer.is_correct == 1), 1), else_=0)).label("practice_correct"),
+            func.sum(case((and_(UserAnswer.exam_id.is_not(None), UserAnswer.is_correct == 1), 1), else_=0)).label("exam_correct"),
+        )
+        .select_from(UserAnswer)
+        .join(Question, UserAnswer.question_id == Question.id)
+        .filter(*filters)
+        .group_by(UserAnswer.question_id)
+        .all()
+    )
+
+    # 以上聚合没有应用分类/题型/关键词过滤，需要按题目属性再筛一次
+    categories = {c.id: c for c in db.query(Category).filter(Category.type == "question").all()}
+    allowed_question_ids = {
+        q.id for q, _a in query.all()
+    }
+    groups = []
+    for row in rows:
+        qid, answered, correct, users, p_answered, e_answered, p_correct, e_correct = row
+        if int(qid) not in allowed_question_ids:
+            continue
+        answered = int(answered or 0)
+        correct = int(correct or 0)
+        wrong = answered - correct
+        groups.append({
+            "question_id": int(qid),
+            "answered": answered,
+            "correct": correct,
+            "wrong": wrong,
+            "accuracy": round(correct * 100 / answered, 1) if answered else 0.0,
+            "wrong_rate": round(wrong * 100 / answered, 1) if answered else 0.0,
+            "users": int(users or 0),
+            "practice_answered": int(p_answered or 0),
+            "exam_answered": int(e_answered or 0),
+            "practice_correct": int(p_correct or 0),
+            "exam_correct": int(e_correct or 0),
+        })
+
+    total_answered = sum(g["answered"] for g in groups)
+    total_correct = sum(g["correct"] for g in groups)
+    total_wrong = total_answered - total_correct
+    summary = {
+        "question_count": len(groups),
+        "answered": total_answered,
+        "correct": total_correct,
+        "wrong": total_wrong,
+        "accuracy": round(total_correct * 100 / total_answered, 1) if total_answered else 0.0,
+        "high_wrong": sum(1 for g in groups if g["answered"] >= 3 and g["wrong_rate"] >= 50),
+    }
+
+    if sort == "wrong_rate":
+        groups.sort(key=lambda x: (x["wrong_rate"], x["wrong"], x["answered"]), reverse=True)
+    elif sort == "answered":
+        groups.sort(key=lambda x: (x["answered"], x["wrong"]), reverse=True)
+    else:
+        groups.sort(key=lambda x: (x["wrong"], x["wrong_rate"], x["answered"]), reverse=True)
+
+    total = len(groups)
+    start = (page - 1) * page_size
+    page_groups = groups[start:start + page_size]
+    if not page_groups:
+        return {
+            "summary": summary,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "items": [],
+        }
+
+    page_ids = [g["question_id"] for g in page_groups]
+    questions = {
+        q.id: q for q in db.query(Question).filter(Question.id.in_(page_ids)).all()
+    }
+
+    # 错选分布：某道题大家具体选了哪个错误选项
+    dist_query = db.query(
+        UserAnswer.question_id,
+        UserAnswer.user_answer,
+        func.count(UserAnswer.id).label("cnt"),
+    ).filter(
+        UserAnswer.question_id.in_(page_ids),
+        UserAnswer.is_correct == 0,
+        _local_time(UserAnswer.answer_time) >= start_dt,
+        _local_time(UserAnswer.answer_time) < end_dt,
+    )
+    if source == "practice":
+        dist_query = dist_query.filter(UserAnswer.exam_id.is_(None))
+    elif source == "exam":
+        dist_query = dist_query.filter(UserAnswer.exam_id.is_not(None))
+    dist_rows = dist_query.group_by(UserAnswer.question_id, UserAnswer.user_answer).all()
+    dist_map: dict[int, list] = {}
+    for qid, answer, cnt in dist_rows:
+        dist_map.setdefault(int(qid), []).append({
+            "answer": (answer or "").strip().upper() or "未作答",
+            "count": int(cnt or 0),
+        })
+    for values in dist_map.values():
+        values.sort(key=lambda x: x["count"], reverse=True)
+
+    items = []
+    for g in page_groups:
+        q = questions.get(g["question_id"])
+        if not q:
+            continue
+        cat = categories.get(q.category_id)
+        prof_id = (cat.parent_id or cat.id) if cat else None
+        prof_name = categories.get(prof_id).name if prof_id and categories.get(prof_id) else "未分类"
+        options = db.query(QuestionOption).filter(
+            QuestionOption.question_id == q.id
+        ).order_by(QuestionOption.sort).all()
+        correct_answer = "".join(sorted(
+            o.label.strip().upper() for o in options if o.is_correct == 1
+        ))
+        item = dict(g)
+        item.update({
+            "content": q.content,
+            "image": q.image,
+            "type": q.type,
+            "type_label": TYPE_LABELS.get(q.type, q.type),
+            "score": float(q.score or 1.0),
+            "category_id": q.category_id,
+            "category_name": cat.name if cat else "未分类",
+            "profession_id": prof_id,
+            "profession": prof_name,
+            "correct_answer": correct_answer,
+            "analysis": q.analysis,
+            "options": [
+                {
+                    "id": o.id,
+                    "label": o.label,
+                    "content": o.content,
+                    "is_correct": int(o.is_correct or 0),
+                }
+                for o in options
+            ],
+            "wrong_answers": dist_map.get(g["question_id"], []),
+        })
+        items.append(item)
+
+    return {
+        "summary": summary,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+    }
 
 
 @router.get("/dashboard", dependencies=[Depends(require_admin)])

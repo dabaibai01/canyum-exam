@@ -150,6 +150,9 @@
         <van-cell title="之后" :value="resultLine" />
       </van-cell-group>
       <div class="action-buttons">
+        <van-button type="warning" plain round block @click="goExamWrongBook">查看考试错题</van-button>
+      </div>
+      <div class="action-buttons">
         <van-button type="primary" round block @click="goExamList">返回考试列表</van-button>
       </div>
       <div class="action-buttons">
@@ -385,6 +388,10 @@ const goExamList = () => {
 
 const goRecords = () => {
   router.push('/exam/records')
+}
+
+const goExamWrongBook = () => {
+  router.push('/wrong?source=exam')
 }
 
 onMounted(loadExam)

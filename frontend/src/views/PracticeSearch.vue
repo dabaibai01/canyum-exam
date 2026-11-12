@@ -7,10 +7,12 @@
         shape="round"
         placeholder="输入题干或解析里的关键词"
         show-action
-        action-text="搜索"
         @search="doSearch"
-        @click-action="doSearch"
-      />
+      >
+        <template #action>
+          <button type="button" class="search-action" @click="doSearch">搜索</button>
+        </template>
+      </van-search>
     </div>
 
     <div v-if="searched" class="search-summary">
@@ -152,6 +154,14 @@ onMounted(() => {
 .search-box :deep(.van-search) {
   padding: 4px 0;
   background: transparent;
+}
+.search-action {
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  font-size: 14px;
+  padding: 0 4px 0 10px;
+  cursor: pointer;
 }
 .search-summary {
   padding: 8px 18px 4px;

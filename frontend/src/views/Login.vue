@@ -4,7 +4,7 @@
 
     <div class="login-hero">
       <div class="brand-mark">
-        <img :src="siteLogo()" alt="可以云码" class="brand-logo" />
+        <img :src="siteLogo()" alt="铁刷客" class="brand-logo" />
       </div>
       <div class="brand-title">{{ site.site_name }}</div>
       <div class="brand-sub">{{ site.site_subtitle }}</div>
@@ -36,10 +36,13 @@
           </van-button>
         </div>
       </van-form>
+      <div class="register-link" @click="router.push('/register')">
+        还没有账号？申请注册
+      </div>
     </div>
 
     <div class="login-tip">如忘记密码或账号异常，请联系管理员</div>
-    <div class="login-dev">V1.1 · {{ site.developer_name }}</div>
+    <div class="login-dev">V2.0 · {{ site.developer_name }}</div>
   </div>
 </template>
 
@@ -137,6 +140,12 @@ const onLogin = async () => {
 }
 .form-actions {
   padding: 18px 16px 10px;
+}
+.register-link {
+  padding: 0 16px 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 .login-tip {
   margin-top: 18px;

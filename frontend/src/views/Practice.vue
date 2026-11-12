@@ -53,6 +53,15 @@
           <div class="row-count">{{ favoritesTotal }} 题</div>
           <van-icon name="arrow" class="row-arrow" />
         </div>
+        <div class="cat-row" @click="openFavCompose">
+          <div class="row-icon compose-icon"><van-icon name="notes-o" size="18" /></div>
+          <div class="row-main">
+            <div class="row-title">收藏题组卷</div>
+            <div class="row-sub">用收藏的重点题生成一套自测卷</div>
+          </div>
+          <div class="row-count">{{ favoritesTotal }} 题</div>
+          <van-icon name="arrow" class="row-arrow" />
+        </div>
         <div class="cat-row no-line" @click="router.push('/wrong')">
           <div class="row-icon wrong-icon"><van-icon name="warning-o" size="18" /></div>
           <div class="row-main">
@@ -90,14 +99,54 @@
     </div>
 
     <van-empty v-if="!groups.length" description="暂无题库分类" />
+
+    <!-- 收藏题组卷 -->
+    <van-popup v-model:show="showFavCompose" position="bottom" round class="compose-popup">
+      <div class="compose-head">
+        <span>收藏题组卷</span>
+        <van-icon name="cross" size="18" @click="showFavCompose = false" />
+      </div>
+      <div class="compose-body">
+        <div class="compose-summary">
+          当前共有 <b>{{ favoritesTotal }}</b> 道收藏题，最多可组 <b>{{ favComposeMax }}</b> 道。
+        </div>
+        <div class="compose-row">
+          <div>
+            <div class="compose-label">题目数量</div>
+            <div class="compose-hint">按收藏时间从新到旧抽取</div>
+          </div>
+          <van-stepper v-model="favCompose.count" :min="1" :max="favComposeMax" integer />
+        </div>
+        <div class="compose-row">
+          <div>
+            <div class="compose-label">每题分值</div>
+            <div class="compose-hint">0.5～10 分</div>
+          </div>
+          <van-stepper v-model="favCompose.score" :min="0.5" :max="10" :step="0.5" :decimal-length="1" />
+        </div>
+        <div class="compose-row">
+          <div>
+            <div class="compose-label">考试时长</div>
+            <div class="compose-hint">5～180 分钟</div>
+          </div>
+          <van-stepper v-model="favCompose.duration" :min="5" :max="180" :step="5" integer />
+        </div>
+        <div class="compose-total">
+          共 <b>{{ favCompose.count }}</b> 题 · 满分 <b>{{ favTotalScore }}</b> 分 · 及格 <b>{{ favPassScore }}</b> 分
+        </div>
+        <van-button type="primary" round block :loading="composing" @click="submitFavCompose">
+          生成收藏题自测卷并开始
+        </van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { questionApi, practiceApi } from '../api'
+import { examApi, questionApi, practiceApi } from '../api'
 import { getPracticeOffset } from '../utils/practiceProgress'
 
 const router = useRouter()
@@ -107,6 +156,14 @@ const groups = ref([])
 const totalCount = ref(0)
 const pendingWrong = ref(0)
 const favoritesTotal = ref(0)
+const showFavCompose = ref(false)
+const composing = ref(false)
+const favCompose = ref({ count: 10, score: 1, duration: 30 })
+const favComposeMax = computed(() => Math.min(favoritesTotal.value, 50))
+const favTotalScore = computed(() =>
+  Number((Number(favCompose.value.count || 0) * Number(favCompose.value.score || 0)).toFixed(1))
+)
+const favPassScore = computed(() => Number((favTotalScore.value * 0.6).toFixed(1)))
 
 const goSearch = () => {
   const text = keyword.value.trim()
@@ -126,6 +183,39 @@ const startFavorites = () => {
     path: '/practice/start',
     query: { source: 'favorite', total: String(favoritesTotal.value) }
   })
+}
+
+const openFavCompose = () => {
+  if (!favoritesTotal.value) {
+    showToast('还没有收藏题目，先刷题收藏几道重点题吧')
+    return
+  }
+  favCompose.value.count = Math.min(10, favComposeMax.value)
+  showFavCompose.value = true
+}
+
+const submitFavCompose = async () => {
+  if (composing.value) return
+  if (!favoritesTotal.value) {
+    showToast('还没有收藏题目')
+    return
+  }
+  composing.value = true
+  try {
+    const exam = await examApi.createSelfExam({
+      source: 'favorite',
+      count: Number(favCompose.value.count || 1),
+      score: Number(favCompose.value.score || 1),
+      duration: Number(favCompose.value.duration || 30)
+    })
+    showFavCompose.value = false
+    showToast('收藏题自测卷已生成')
+    router.push('/exam/start?id=' + exam.id)
+  } catch (error) {
+    showToast(error.response?.data?.detail || '组卷失败')
+  } finally {
+    composing.value = false
+  }
 }
 
 const resumeHint = (categoryId) => {
@@ -316,6 +406,10 @@ onMounted(() => {
   background: rgba(229, 72, 77, 0.1);
   color: var(--danger);
 }
+.compose-icon {
+  background: rgba(64, 158, 255, 0.12);
+  color: #409eff;
+}
 .row-main {
   flex: 1;
   min-width: 0;
@@ -346,5 +440,59 @@ onMounted(() => {
   color: var(--text-tertiary);
   font-size: 12px;
   margin-left: 6px;
+}
+
+/* 收藏题组卷 */
+.compose-popup {
+  overflow: hidden;
+}
+.compose-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+.compose-body {
+  padding: 4px 16px calc(18px + env(safe-area-inset-bottom));
+}
+.compose-summary {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--card-bg-sub);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.compose-summary b {
+  color: var(--brand);
+}
+.compose-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.compose-label {
+  font-size: 14px;
+  color: var(--text-color);
+}
+.compose-hint {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.compose-total {
+  padding: 14px 0 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.compose-total b {
+  color: var(--danger);
 }
 </style>

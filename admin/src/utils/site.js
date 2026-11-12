@@ -3,10 +3,10 @@ import { siteApi } from '../api'
 import fallbackLogo from '../assets/logo.png'
 
 const DEFAULTS = {
-  site_name: '可以云码考试系统',
+  site_name: '铁刷客考试系统',
   site_subtitle: '考试 · 刷题 · 组卷',
   developer_name: '可以云码软件开发',
-  footer_text: '可以云码考试系统',
+  footer_text: '铁刷客考试系统',
   icp_no: '',
   logo_url: ''
 }

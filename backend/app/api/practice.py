@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.wrong_dates import purge_old_wrongs, wrong_date_bounds
 from app.models.category import Category
+from app.models.exam import Exam
 from app.models.practice import UserAnswer, WrongQuestion, QuestionMark
 from app.models.question import Question, QuestionOption
 from app.models.user import User
@@ -50,17 +51,22 @@ def submit_answer(
             WrongQuestion.user_id == current_user.id,
             WrongQuestion.question_id == q.id,
         ).first()
+        source = "exam" if answer.exam_id else "practice"
         if existing:
             existing.wrong_count += 1
             existing.last_wrong_time = func.now()
             existing.last_answer = answer.user_answer
             existing.mastered = 0
+            existing.source = source
+            existing.exam_id = answer.exam_id
         else:
             db.add(WrongQuestion(
                 user_id=current_user.id,
                 question_id=q.id,
                 wrong_count=1,
                 last_answer=answer.user_answer,
+                source=source,
+                exam_id=answer.exam_id,
             ))
     else:
         existing = db.query(WrongQuestion).filter(
@@ -99,12 +105,17 @@ def _wrong_query(
     status: str,
     start_date: date | None = None,
     end_date: date | None = None,
+    source: str | None = None,
 ):
     query = (
         db.query(WrongQuestion)
         .join(Question, Question.id == WrongQuestion.question_id)
         .filter(WrongQuestion.user_id == user_id)
     )
+    if source == "practice":
+        query = query.filter(WrongQuestion.source == "practice")
+    elif source == "exam":
+        query = query.filter(WrongQuestion.source == "exam")
     if status == "pending":
         query = query.filter(WrongQuestion.mastered == 0)
     elif status == "mastered":
@@ -172,6 +183,24 @@ def _parse_question_ids(value: str):
         if part.isdigit():
             ids.append(int(part))
     return ids
+
+
+def _mark_map(db: Session, user_id: int, question_ids: list[int]):
+    """批量取收藏状态，错题列表卡片可以直接显示星标"""
+    if not question_ids:
+        return {}
+    marks = db.query(QuestionMark).filter(
+        QuestionMark.user_id == user_id,
+        QuestionMark.question_id.in_(question_ids),
+    ).all()
+    return {int(m.question_id): bool(m.is_favorite) for m in marks}
+
+
+def _exam_title_map(db: Session, exam_ids: list[int]):
+    if not exam_ids:
+        return {}
+    rows = db.query(Exam).filter(Exam.id.in_(exam_ids)).all()
+    return {int(e.id): e.title for e in rows}
 
 
 @router.get("/marks", response_model=list[MarkOut])
@@ -333,6 +362,7 @@ def list_wrong_questions(
     sort: str = Query("recent", description="recent 最近错的在前 / count 错得多的在前"),
     start_date: date | None = Query(None, description="开始日期（本地日期 YYYY-MM-DD）"),
     end_date: date | None = Query(None, description="结束日期（本地日期 YYYY-MM-DD）"),
+    source: str | None = Query(None, description="来源：practice 刷题 / exam 考试，留空为全部"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -340,7 +370,7 @@ def list_wrong_questions(
 ):
     purged = purge_old_wrongs(db, current_user.id)
     query = _wrong_query(
-        db, current_user.id, category_id, type, keyword, status, start_date, end_date
+        db, current_user.id, category_id, type, keyword, status, start_date, end_date, source
     )
     total = query.count()
 
@@ -351,6 +381,8 @@ def list_wrong_questions(
 
     rows = query.offset((page - 1) * page_size).limit(page_size).all()
     names = _category_names(db)
+    marks = _mark_map(db, current_user.id, [int(w.question_id) for w in rows])
+    exams = _exam_title_map(db, [int(w.exam_id) for w in rows if w.exam_id])
 
     items = []
     for w in rows:
@@ -364,15 +396,24 @@ def list_wrong_questions(
             "last_wrong_time": w.last_wrong_time,
             "last_answer": w.last_answer,
             "mastered": w.mastered,
+            "source": w.source or "practice",
+            "exam_id": w.exam_id,
+            "exam_title": exams.get(int(w.exam_id)) if w.exam_id else None,
+            "is_favorite": marks.get(int(w.question_id), False),
             "content": q.content,
             "type": q.type,
             "category_id": q.category_id,
             "category_name": names.get(q.category_id, "未分类"),
         })
 
-    pending_total = db.query(WrongQuestion).filter(
+    pending_query = db.query(WrongQuestion).filter(
         WrongQuestion.user_id == current_user.id, WrongQuestion.mastered == 0
-    ).count()
+    )
+    if source == "practice":
+        pending_query = pending_query.filter(WrongQuestion.source == "practice")
+    elif source == "exam":
+        pending_query = pending_query.filter(WrongQuestion.source == "exam")
+    pending_total = pending_query.count()
     mastered_total = db.query(WrongQuestion).filter(
         WrongQuestion.user_id == current_user.id, WrongQuestion.mastered == 1
     ).count()
@@ -398,6 +439,7 @@ def wrong_questions_for_practice(
     sort: str = Query("count"),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
+    source: str | None = Query(None, description="来源：practice 刷题 / exam 考试"),
     count: int = Query(10, ge=1, le=50),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -406,7 +448,7 @@ def wrong_questions_for_practice(
     """按当前错题筛选条件抽题，用于“重做这些错题”"""
     purge_old_wrongs(db, current_user.id)
     query = _wrong_query(
-        db, current_user.id, category_id, type, keyword, status, start_date, end_date
+        db, current_user.id, category_id, type, keyword, status, start_date, end_date, source
     )
     if sort == "count":
         query = query.order_by(WrongQuestion.wrong_count.desc(), WrongQuestion.id.asc())
@@ -444,11 +486,19 @@ def wrong_detail(
 
     detail = _question_payload(db, q)
     names = _category_names(db)
+    mark = db.query(QuestionMark).filter(
+        QuestionMark.user_id == current_user.id,
+        QuestionMark.question_id == question_id,
+    ).first()
     detail.update({
         "wrong_count": w.wrong_count,
         "last_wrong_time": w.last_wrong_time,
         "last_answer": w.last_answer,
         "mastered": w.mastered,
+        "source": w.source or "practice",
+        "exam_id": w.exam_id,
+        "exam_title": _exam_title_map(db, [int(w.exam_id)]).get(int(w.exam_id)) if w.exam_id else None,
+        "is_favorite": bool(mark.is_favorite) if mark else False,
         "category_name": names.get(q.category_id, "未分类"),
     })
     return detail

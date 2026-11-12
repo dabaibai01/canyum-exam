@@ -19,6 +19,7 @@ class UserOut(BaseModel):
     real_name: str
     phone: str | None
     role: str
+    status: str
     department: str | None
     position: str | None
     avatar: str | None

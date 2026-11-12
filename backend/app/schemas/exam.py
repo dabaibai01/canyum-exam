@@ -49,16 +49,18 @@ class SelfComposeItem(BaseModel):
     count: int = 0
 
 class SelfCompose(BaseModel):
-    """学员自己组卷。source=bank 从题库抽题；source=wrong 只抽错题"""
+    """学员自己组卷。source=bank 从题库抽题；source=wrong 只抽错题；source=favorite 只抽收藏题"""
     source: str = "bank"
     category_id: int | None = None
     compose: list[SelfComposeItem] = []
-    # 错题组卷时使用：抽多少道、每题分值、题型、错题状态、排序
+    # 错题/收藏题组卷时使用：抽多少道、每题分值、状态、排序
     count: int = 20
     score: float = 1.0
     wrong_type: str | None = None
     wrong_status: str = "pending"
     wrong_sort: str = "count"
+    wrong_source: str | None = None
+    favorite_type: str | None = None
     start_date: date | None = None
     end_date: date | None = None
     duration: int = 30
